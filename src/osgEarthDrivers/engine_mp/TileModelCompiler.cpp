@@ -1094,7 +1094,7 @@ namespace
             {
                 // get model coords
                 osg::Vec3d model;
-                d.model->_tileLocator->convertLocalToModel(*it, model);
+                d.model->_tileLocator->unitToModel(*it, model);
                 model = model * d.world2local;
 
                 stitch_verts->push_back(model);
@@ -1104,7 +1104,7 @@ namespace
                 osg::Vec3d local_one(*it);
                 local_one.z() += 1.0;
                 osg::Vec3d model_one;
-                d.model->_tileLocator->convertLocalToModel( local_one, model_one );
+                d.model->_tileLocator->unitToModel( local_one, model_one );
                 model_one = (model_one*d.world2local) - model;
                 model_one.normalize();
                 (*stitch_norms)[++norm_i] = model_one;

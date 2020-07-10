@@ -114,7 +114,7 @@ namespace osgEarth { namespace Drivers { namespace MPTerrainEngine
         // override from TerrainEngineNode
         virtual void updateTextureCombining() { updateState(); }
         
-        virtual void notifyExistingNodes(TerrainEngine::NodeCallback* cb);
+        virtual void notifyExistingNodes(osg::NodeCallback* cb);
 
     private:
         void init();
@@ -151,7 +151,7 @@ namespace osgEarth { namespace Drivers { namespace MPTerrainEngine
 
         osg::ref_ptr< ElevationChangedCallback > _elevationCallback;
 
-        osg::ref_ptr<TerrainEngine::NodeCallback> _normalMapInstaller;
+        osg::ref_ptr<osg::NodeCallback> _normalMapInstaller;
 
         MapFrame* _update_mapf; // map frame for the main/update traversal thread
 

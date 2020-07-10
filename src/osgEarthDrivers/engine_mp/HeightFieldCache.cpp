@@ -54,10 +54,6 @@ HeightFieldCache::getOrCreateHeightField(const MapFrame&                 frame,
     HFKey cachekey;
     cachekey._key          = key;
     cachekey._revision     = frame.getRevision();
-    cachekey._samplePolicy = samplePolicy;
-
-    if (progress)
-        progress->stats()["hfcache_try_count"] += 1;
 
     LRUCache<HFKey,HFValue>::Record rec;
     if ( _enabled && _cache.get(cachekey, rec) )
@@ -66,11 +62,6 @@ HeightFieldCache::getOrCreateHeightField(const MapFrame&                 frame,
         out_hf         = rec.value()._hf.get();
         out_isFallback = rec.value()._isFallback;
 
-        if (progress)
-        {
-            progress->stats()["hfcache_hit_count"] += 1;
-            progress->stats()["hfcache_hit_rate"] = progress->stats()["hfcache_hit_count"]/progress->stats()["hfcache_try_count"];
-        }
     }
 
     else

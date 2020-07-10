@@ -132,9 +132,9 @@ namespace osgEarth { namespace Drivers { namespace MPTerrainEngine
             bool                            expressHeightsAsHAE,
             ProgressCallback*               progress) const;
 
-        bool populateHeightFieldAndNormalMap(
+        bool populateHeightField(
             osg::ref_ptr<osg::HeightField>& hf,
-            osg::ref_ptr<NormalMap>&        normalMap,
+            float*                 resolutions,
             const TileKey&                  key,
             bool                            expressHeightsAsHAE,
             ProgressCallback*               progress) const;
