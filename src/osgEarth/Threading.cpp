@@ -23,14 +23,11 @@
 #include "Metrics"
 
 #ifdef _WIN32
-  #ifndef OSGEARTH_PROFILING
-    // because Tracy already does this in its header file..
-    extern "C" unsigned long __stdcall GetCurrentThreadId();
-  #endif
+#   include <Windows.h>
+#   include <processthreadsapi.h>
 #elif defined(__APPLE__) || defined(__LINUX__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__ANDROID__)
 #   include <unistd.h>
 #   include <sys/syscall.h>
-#else
 #   include <pthread.h>
 #endif
 
@@ -39,50 +36,69 @@ using namespace osgEarth::Util;
 
 //...................................................................
 
-#ifdef OSGEARTH_PROFILING
-#define MUTEX_TYPE tracy::Lockable<std::recursive_mutex>
-#else
-#define MUTEX_TYPE std::recursive_mutex
-#endif
+//#ifdef OSGEARTH_PROFILING
+//#define MUTEX_TYPE tracy::Lockable<std::recursive_mutex>
+//#else
+//#define MUTEX_TYPE std::recursive_mutex
+//#endif
 
-Mutex::Mutex()
+Mutex::Mutex() :
+    _metricsData(nullptr)
 {
 #ifdef OSGEARTH_PROFILING
-    tracy::SourceLocationData* s = new tracy::SourceLocationData();
-    s->name = nullptr;
-    s->function = "unnamed";
-    s->file = __FILE__;
-    s->line = __LINE__;
-    s->color = 0;
-    _handle = new tracy::Lockable<std::mutex>(s);
-    _data = s;
+    if (Metrics::enabled())
+    {
+        tracy::SourceLocationData* s = new tracy::SourceLocationData();
+        s->name = nullptr;
+        s->function = "unnamed";
+        s->file = __FILE__;
+        s->line = __LINE__;
+        s->color = 0;
+        _handle = new tracy::Lockable<std::mutex>(s);
+        _metricsData = s;
+    }
+    else
+    {
+        _handle = new std::mutex();
+    }
 #else
     _handle = new std::mutex();
-    _data = NULL;
 #endif
 }
 
 Mutex::Mutex(const std::string& name, const char* file, std::uint32_t line) :
-    _name(name)
+    _name(name),
+    _metricsData(nullptr)
 {
-#ifdef OSGEARTH_PROFILING        
-    tracy::SourceLocationData* s = new tracy::SourceLocationData();
-    s->name = nullptr;
-    s->function = _name.c_str();
-    s->file = file;
-    s->line = line;
-    s->color = 0;
-    _handle = new tracy::Lockable<std::mutex>(s);
-    _data = s;
+#ifdef OSGEARTH_PROFILING
+    if (Metrics::enabled())
+    {
+        tracy::SourceLocationData* s = new tracy::SourceLocationData();
+        s->name = nullptr;
+        s->function = _name.c_str();
+        s->file = file;
+        s->line = line;
+        s->color = 0;
+        _handle = new tracy::Lockable<std::mutex>(s);
+        _metricsData = s;
+    }
+    else
+    {
+        _handle = new std::mutex();
+    }
 #else
     _handle = new std::mutex();
-    _data = NULL;
 #endif
 }
 
 Mutex::~Mutex()
 {
-    delete static_cast<MUTEX_TYPE*>(_handle);
+#ifdef OSGEARTH_PROFILING
+    if (_metricsData)
+        delete static_cast<tracy::Lockable<std::mutex>*>(_handle);
+    else
+#endif
+        delete static_cast<std::mutex*>(_handle);
 }
 
 void
@@ -90,9 +106,9 @@ Mutex::setName(const std::string& name)
 {
     _name = name;
 #ifdef OSGEARTH_PROFILING
-    if (_data)
+    if (_metricsData)
     {
-        tracy::SourceLocationData* s = static_cast<tracy::SourceLocationData*>(_data);
+        tracy::SourceLocationData* s = static_cast<tracy::SourceLocationData*>(_metricsData);
         s->function = _name.c_str();
     }
 #endif
@@ -102,42 +118,61 @@ void
 Mutex::lock()
 {
     if (_name.empty()) {
-        volatile int i=0; // breakpoint for finding unnamed mutexes -GW
+        volatile int x =0 ; // breakpoint for finding unnamed mutexes
     }
-    static_cast<MUTEX_TYPE*>(_handle)->lock();
+
+#ifdef OSGEARTH_PROFILING
+    if (_metricsData)
+        static_cast<tracy::Lockable<std::mutex>*>(_handle)->lock();
+    else
+#endif
+        static_cast<std::mutex*>(_handle)->lock();
 }
 
 void
 Mutex::unlock()
 {
-    static_cast<MUTEX_TYPE*>(_handle)->unlock();
+#ifdef OSGEARTH_PROFILING
+    if (_metricsData)
+        static_cast<tracy::Lockable<std::mutex>*>(_handle)->unlock();
+    else
+#endif
+        static_cast<std::mutex*>(_handle)->unlock();
 }
 
 bool
 Mutex::try_lock()
 {
-    return static_cast<MUTEX_TYPE*>(_handle)->try_lock();
+#ifdef OSGEARTH_PROFILING
+    if (_metricsData)
+        return static_cast<tracy::Lockable<std::mutex>*>(_handle)->try_lock();
+    else
+#endif
+        return static_cast<std::mutex*>(_handle)->try_lock();
 }
 
 //...................................................................
 
-#ifdef OSGEARTH_PROFILING
-#define RECURSIVE_MUTEX_TYPE tracy::Lockable<std::recursive_mutex>
-#else
-#define RECURSIVE_MUTEX_TYPE std::recursive_mutex
-#endif
-
 RecursiveMutex::RecursiveMutex() :
-    _enabled(true)
+    _enabled(true),
+    _metricsData(nullptr)
 {
 #ifdef OSGEARTH_PROFILING
-    tracy::SourceLocationData* s = new tracy::SourceLocationData();
-    s->name = nullptr;
-    s->function = "unnamed recursive";
-    s->file = __FILE__;
-    s->line = __LINE__;
-    s->color = 0;
-    _handle = new tracy::Lockable<std::recursive_mutex>(s);
+    if (Metrics::enabled())
+    {
+        tracy::SourceLocationData* s = new tracy::SourceLocationData();
+        s->name = nullptr;
+        s->function = "unnamed recursive";
+        s->file = __FILE__;
+        s->line = __LINE__;
+        s->color = 0;
+        _handle = new tracy::Lockable<std::recursive_mutex>(s);
+        _metricsData = s;
+    }
+    else
+    {
+        _handle = new std::recursive_mutex();
+    }
 #else
     _handle = new std::recursive_mutex();
 #endif
@@ -145,16 +180,25 @@ RecursiveMutex::RecursiveMutex() :
 
 RecursiveMutex::RecursiveMutex(const std::string& name, const char* file, std::uint32_t line) :
     _name(name),
-    _enabled(true)
+    _enabled(true),
+    _metricsData(nullptr)
 {
-#ifdef OSGEARTH_PROFILING        
-    tracy::SourceLocationData* s = new tracy::SourceLocationData();
-    s->name = nullptr;
-    s->function = _name.c_str();
-    s->file = file;
-    s->line = line;
-    s->color = 0;
-    _handle = new tracy::Lockable<std::recursive_mutex>(s);
+#ifdef OSGEARTH_PROFILING
+    if (Metrics::enabled())
+    {
+        tracy::SourceLocationData* s = new tracy::SourceLocationData();
+        s->name = nullptr;
+        s->function = _name.c_str();
+        s->file = file;
+        s->line = line;
+        s->color = 0;
+        _handle = new tracy::Lockable<std::recursive_mutex>(s);
+        _metricsData = s;
+    }
+    else
+    {
+        _handle = new std::recursive_mutex();
+    }
 #else
     _handle = new std::recursive_mutex();
 #endif
@@ -163,7 +207,14 @@ RecursiveMutex::RecursiveMutex(const std::string& name, const char* file, std::u
 RecursiveMutex::~RecursiveMutex()
 {
     if (_handle)
-        delete static_cast<RECURSIVE_MUTEX_TYPE*>(_handle);
+    {
+#ifdef OSGEARTH_PROFILING
+        if (_metricsData)
+            delete static_cast<tracy::Lockable<std::recursive_mutex>*>(_handle);
+        else
+#endif
+            delete static_cast<std::recursive_mutex*>(_handle);
+    }
 }
 
 void
@@ -173,26 +224,60 @@ RecursiveMutex::disable()
 }
 
 void
+RecursiveMutex::setName(const std::string& name)
+{
+    _name = name;
+
+#ifdef OSGEARTH_PROFILING
+    if (_metricsData)
+    {
+        tracy::SourceLocationData* s = static_cast<tracy::SourceLocationData*>(_metricsData);
+        s->function = _name.c_str();
+    }
+#endif
+}
+
+void
 RecursiveMutex::lock()
 {
     if (_enabled)
-        static_cast<RECURSIVE_MUTEX_TYPE*>(_handle)->lock();
+    {
+#ifdef OSGEARTH_PROFILING
+        if (_metricsData)
+            static_cast<tracy::Lockable<std::recursive_mutex>*>(_handle)->lock();
+        else
+#endif
+            static_cast<std::recursive_mutex*>(_handle)->lock();
+    }
 }
 
 void
 RecursiveMutex::unlock()
 {
     if (_enabled)
-        static_cast<RECURSIVE_MUTEX_TYPE*>(_handle)->unlock();
+    {
+#ifdef OSGEARTH_PROFILING
+        if (_metricsData)
+            static_cast<tracy::Lockable<std::recursive_mutex>*>(_handle)->unlock();
+        else
+#endif
+            static_cast<std::recursive_mutex*>(_handle)->unlock();
+    }
 }
 
 bool
 RecursiveMutex::try_lock()
 {
     if (_enabled)
-        return static_cast<RECURSIVE_MUTEX_TYPE*>(_handle)->try_lock();
-    else
-        return true;
+    {
+#ifdef OSGEARTH_PROFILING
+        if (_metricsData)
+            return static_cast<tracy::Lockable<std::recursive_mutex>*>(_handle)->try_lock();
+        else
+#endif
+            return static_cast<std::recursive_mutex*>(_handle)->try_lock();
+    }
+    else return true;
 }
 
 //...................................................................
@@ -291,7 +376,17 @@ void Event::reset()
 #undef LC
 #define LC "[ThreadPool] "
 
-ThreadPool::ThreadPool(unsigned int numThreads) :
+ThreadPool::ThreadPool(unsigned numThreads) :
+    _name("osgEarth.ThreadPool"),
+    _numThreads(numThreads),
+    _done(false),
+    _queueMutex("ThreadPool")
+{
+    startThreads();
+}
+
+ThreadPool::ThreadPool(const std::string& name, unsigned numThreads) :
+    _name(name),
     _numThreads(numThreads),
     _done(false),
     _queueMutex("ThreadPool")
@@ -328,6 +423,9 @@ void ThreadPool::startThreads()
         _threads.push_back(std::thread( [this]
         {
             OE_DEBUG << LC << "Thread " << std::this_thread::get_id() << " started." << std::endl;
+
+            OE_THREAD_NAME(this->_name.c_str());
+
             while(!_done)
             {
                 osg::ref_ptr<osg::Operation> op;
@@ -403,3 +501,28 @@ ThreadPool::get(const osgDB::Options* options)
     return OptionsData<ThreadPool>::get(options, "osgEarth::ThreadPool");
 }
 
+void
+osgEarth::Threading::setThreadName(const std::string& name)
+{
+#if (defined _WIN32 && defined _WIN32_WINNT_WIN10) || (defined __CYGWIN__)
+
+    wchar_t buf[256];
+    mbstowcs(buf, name.c_str(), 256);
+    ::SetThreadDescription(::GetCurrentThread(), buf);
+
+#elif defined _GNU_SOURCE && !defined __EMSCRIPTEN__ && !defined __CYGWIN__
+
+    const auto sz = strlen( name.c_str() );
+    if( sz <= 15 )
+    {
+        pthread_setname_np( pthread_self(), name.c_str() );
+    }
+    else
+    {
+        char buf[16];
+        memcpy( buf, name.c_str(), 15 );
+        buf[15] = '\0';
+        pthread_setname_np( pthread_self(), buf );
+    }
+#endif
+}
